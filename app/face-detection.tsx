@@ -36,39 +36,66 @@ export default function FaceDetectionScreen() {
 
   const captureAndAnalyze = async () => {
     if (analyzing) return;
-    
+
     setAnalyzing(true);
     setError("");
-    
+    setEmotion(null);
+
     try {
-      // Simulate emotion detection (in a real app, you would use a proper ML model or API)
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Mock emotion detection result
-      const emotions = ["happy", "sad", "neutral", "surprised", "angry"];
-      const confidences = [0.8, 0.05, 0.1, 0.03, 0.02];
-      const detectedEmotion: EmotionResult = {
-        emotion: emotions[Math.floor(Math.random() * emotions.length)],
-        confidence: 0.7 + Math.random() * 0.3 // Random confidence between 0.7 and 1.0
+      const photo = await cameraRef.current.takePictureAsync({ base64: true });
+
+      const formData = new FormData();
+      formData.append("image_base64", photo.base64);
+      formData.append("api_key", "KY5qPFm-Wsb6-OvwukIbTlO0pMUoA90B");
+      formData.append("api_secret", "syFWIlUw89StgUAuchjD_PDRumn-ULoT");
+      formData.append("return_attributes", "emotion");
+
+      const response = await fetch("https://api-us.faceplusplus.com/facepp/v3/detect", {
+        method: "POST",
+        body: formData,
+      });
+
+      const result = await response.json();
+
+      if (!result.faces || result.faces.length === 0) {
+        throw new Error("No face detected. Try again with better lighting.");
+      }
+
+      const rawEmotions = result.faces[0]?.attributes?.emotion;
+
+      const emotionMap: { [key: string]: string } = {
+        happiness: "happy",
+        sadness: "sad",
+        neutral: "neutral",
+        surprise: "surprised",
+        anger: "angry",
       };
-      
+
+      const filtered = Object.entries(rawEmotions)
+        .filter(([key]) => Object.keys(emotionMap).includes(key))
+        .map(([key, value]) => [emotionMap[key], value] as [string, number]);
+
+      const topEmotion = filtered.reduce((max, curr) => (curr[1] > max[1] ? curr : max));
+
+      const detectedEmotion: EmotionResult = {
+        emotion: topEmotion[0],
+        confidence: topEmotion[1] / 100,
+      };
+
       setEmotion(detectedEmotion);
-      
-      // Save to Supabase if user is logged in
+
       if (user) {
         const { error } = await supabase.from("face_analysis").insert({
           user_id: user.id,
           detected_emotion: detectedEmotion.emotion,
-          confidence: detectedEmotion.confidence
+          confidence: detectedEmotion.confidence,
         });
-        
+
         if (error) throw error;
       }
-      
-      // Get recommended mantra based on emotion
+
       const mantra = getRecommendedMantra(detectedEmotion.emotion);
-      
-      // Navigate to results after a short delay
+
       setTimeout(() => {
         router.push({
           pathname: "/results",
@@ -77,14 +104,13 @@ export default function FaceDetectionScreen() {
             emotion: detectedEmotion.emotion,
             confidence: detectedEmotion.confidence.toFixed(2),
             mantra: mantra.text,
-            explanation: mantra.explanation
-          }
+            explanation: mantra.explanation,
+          },
         });
       }, 1500);
-      
     } catch (err) {
       console.error("Error analyzing face:", err);
-      setError("Failed to analyze facial expression. Please try again.");
+      setError("Failed to analyze facial expression. Try again with proper lighting.");
     } finally {
       setAnalyzing(false);
     }
@@ -95,9 +121,7 @@ export default function FaceDetectionScreen() {
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.messageContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.messageText, { color: colors.textSecondary }]}>
-            Loading camera...
-          </Text>
+          <Text style={[styles.messageText, { color: colors.textSecondary }]}>Loading camera...</Text>
         </View>
       </SafeAreaView>
     );
@@ -108,9 +132,7 @@ export default function FaceDetectionScreen() {
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.messageContainer}>
           <Camera size={48} color={colors.primary} />
-          <Text style={[styles.messageTitle, { color: colors.text }]}>
-            Camera Permission Required
-          </Text>
+          <Text style={[styles.messageTitle, { color: colors.text }]}>Camera Permission Required</Text>
           <Text style={[styles.messageText, { color: colors.textSecondary }]}>
             We need camera access to detect your facial expressions and provide personalized recommendations.
           </Text>
@@ -129,16 +151,10 @@ export default function FaceDetectionScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={["bottom"]}>
       <View style={styles.cameraContainer}>
         {Platform.OS !== "web" ? (
-          <CameraView
-            style={styles.camera}
-            facing={facing}
-            ref={cameraRef}
-          >
+          <CameraView style={styles.camera} facing={facing} ref={cameraRef}>
             {emotion && (
               <View style={styles.emotionOverlay}>
-                <Text style={styles.emotionText}>
-                  Detected: {emotion.emotion.toUpperCase()}
-                </Text>
+                <Text style={styles.emotionText}>Detected: {emotion.emotion.toUpperCase()}</Text>
                 <Text style={styles.confidenceText}>
                   Confidence: {Math.round(emotion.confidence * 100)}%
                 </Text>
@@ -148,19 +164,18 @@ export default function FaceDetectionScreen() {
         ) : (
           <View style={[styles.webFallback, { backgroundColor: "#000" }]}>
             <Text style={styles.webFallbackText}>
-              Camera preview not available on web.
-              Click the button below to simulate emotion detection.
+              Camera preview not available on web. Click the button below to simulate emotion detection.
             </Text>
           </View>
         )}
       </View>
-      
+
       {error ? (
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>{error}</Text>
         </View>
       ) : null}
-      
+
       <View style={styles.controlsContainer}>
         <TouchableOpacity
           style={[styles.controlButton, { backgroundColor: colors.cardBackground }]}
@@ -170,11 +185,11 @@ export default function FaceDetectionScreen() {
           <RefreshCw size={24} color={colors.text} />
           <Text style={[styles.controlText, { color: colors.text }]}>Flip</Text>
         </TouchableOpacity>
-        
+
         <TouchableOpacity
           style={[
             styles.captureButton,
-            { backgroundColor: analyzing ? colors.primaryLight : colors.primary }
+            { backgroundColor: analyzing ? colors.primaryLight : colors.primary },
           ]}
           onPress={captureAndAnalyze}
           disabled={analyzing}
@@ -187,10 +202,10 @@ export default function FaceDetectionScreen() {
             </Text>
           )}
         </TouchableOpacity>
-        
+
         <View style={styles.spacer} />
       </View>
-      
+
       <Text style={[styles.instructionText, { color: colors.textSecondary }]}>
         Position your face in the frame and ensure good lighting for best results
       </Text>
@@ -208,49 +223,45 @@ function getRecommendedMantra(emotion: string): Mantra {
     case "happy":
       return {
         text: "Ananda brahma, ananda brahma, ananda hi brahma",
-        explanation: "Bliss is divine, bliss is divine, bliss indeed is divine. Maintain this joyful state and share it with others."
+        explanation: "Bliss is divine, bliss is divine, bliss indeed is divine. Maintain this joyful state and share it with others.",
       };
     case "sad":
       return {
         text: "Tat tvam asi",
-        explanation: "You are that. Remember your divine nature beyond temporary emotions and find comfort in your true self."
+        explanation: "You are that. Remember your divine nature beyond temporary emotions and find comfort in your true self.",
       };
     case "angry":
       return {
         text: "Shanti, shanti, shantihi",
-        explanation: "Peace, peace, peace. Let go of anger and find the peace that resides within you."
+        explanation: "Peace, peace, peace. Let go of anger and find the peace that resides within you.",
       };
     case "surprised":
       return {
         text: "Prajnanam brahma",
-        explanation: "Consciousness is the ultimate reality. Stay grounded in awareness as you process new experiences."
+        explanation: "Consciousness is the ultimate reality. Stay grounded in awareness as you process new experiences.",
       };
     case "neutral":
       return {
         text: "Aham brahmasmi",
-        explanation: "I am the absolute reality. Recognize the divine consciousness within you."
+        explanation: "I am the absolute reality. Recognize the divine consciousness within you.",
       };
     default:
       return {
         text: "Om shanti shanti shantihi",
-        explanation: "Peace in body, mind, and spirit. Find balance in all aspects of your being."
+        explanation: "Peace in body, mind, and spirit. Find balance in all aspects of your being.",
       };
   }
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   cameraContainer: {
     flex: 1,
     overflow: "hidden",
     borderRadius: 12,
     margin: 16,
   },
-  camera: {
-    flex: 1,
-  },
+  camera: { flex: 1 },
   webFallback: {
     flex: 1,
     justifyContent: "center",
@@ -278,10 +289,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     marginBottom: 4,
   },
-  confidenceText: {
-    color: "#fff",
-    fontSize: 14,
-  },
+  confidenceText: { color: "#fff", fontSize: 14 },
   controlsContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -295,10 +303,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     width: 80,
   },
-  controlText: {
-    marginTop: 4,
-    fontSize: 12,
-  },
+  controlText: { marginTop: 4, fontSize: 12 },
   captureButton: {
     paddingVertical: 14,
     paddingHorizontal: 24,
@@ -306,14 +311,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  captureButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  spacer: {
-    width: 80,
-  },
+  captureButtonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
+  spacer: { width: 80 },
   instructionText: {
     textAlign: "center",
     fontSize: 14,
@@ -333,21 +332,13 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     textAlign: "center",
   },
-  messageText: {
-    fontSize: 16,
-    textAlign: "center",
-    marginBottom: 24,
-  },
+  messageText: { fontSize: 16, textAlign: "center", marginBottom: 24 },
   permissionButton: {
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 8,
   },
-  permissionButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
+  permissionButtonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
   errorContainer: {
     backgroundColor: "#fee2e2",
     padding: 12,
@@ -355,8 +346,5 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 16,
   },
-  errorText: {
-    color: "#ef4444",
-    textAlign: "center",
-  },
+  errorText: { color: "#ef4444", textAlign: "center" },
 });

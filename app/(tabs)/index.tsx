@@ -1,15 +1,17 @@
 import { useState } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "@/context/auth";
 import { useTheme } from "@/context/theme";
 import { Camera, FileText, Brain } from "lucide-react-native";
+import RecentActivity from "@/components/RecentActivity";
 
 export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { colors } = useTheme();
+
   const [greeting, setGreeting] = useState(() => {
     const hour = new Date().getHours();
     if (hour < 12) return "Good morning";
@@ -76,7 +78,7 @@ export default function HomeScreen() {
         </View>
 
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Wellness Tools</Text>
-        
+
         <View style={styles.featuresContainer}>
           {features.map((feature) => (
             <TouchableOpacity
@@ -95,13 +97,8 @@ export default function HomeScreen() {
           ))}
         </View>
 
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Recent Activity</Text>
-        
-        <View style={[styles.emptyState, { backgroundColor: colors.cardBackground }]}>
-          <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>
-            You haven't completed any assessments yet. Start your wellness journey by using one of the tools above.
-          </Text>
-        </View>
+        {/* ✅ Recent Activity Component */}
+        <RecentActivity />
       </ScrollView>
     </SafeAreaView>
   );
@@ -189,22 +186,6 @@ const styles = StyleSheet.create({
   },
   featureDescription: {
     fontSize: 14,
-    lineHeight: 20,
-  },
-  emptyState: {
-    borderRadius: 16,
-    padding: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  emptyStateText: {
-    fontSize: 14,
-    textAlign: "center",
     lineHeight: 20,
   },
 });
