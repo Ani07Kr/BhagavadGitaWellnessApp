@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "BGWadGita Wellness",
-    "slug": "bgwadgita-wellness",
+    "name": "BhagavadGita Wellness",
+    "slug": "bhagavadgita-wellness",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon2.png",
@@ -9,23 +9,23 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/splash-icon.png",
+      "image": "./assets/images/icon2.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "app.rork.bgwadgita-wellness"
+      "bundleIdentifier": "app.rork.bhagavadgita-wellness"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./assets/images/icon2.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "app.rork.bgwadgita-wellness"
+      "package": "app.rork.bhagavadgita-wellness"
     },
     "web": {
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/icon2.png"
     },
     "plugins": [
       [
