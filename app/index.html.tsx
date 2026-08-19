@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
-import { Link, Stack, useRouter } from "expo-router";
-import { StyleSheet, Text, View, TouchableOpacity, Platform } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Platform } from "react-native";
+import { useRouter } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "@/context/theme";
-import { AlertCircle, ArrowLeft, KeyRound } from "lucide-react-native";
+import { AlertTriangle, KeyRound, ArrowLeft, RefreshCw } from "lucide-react-native";
 
-export default function NotFoundScreen() {
+export default function IndexHtmlHandlerScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const [authError, setAuthError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (Platform.OS === "web" && typeof window !== "undefined") {
@@ -23,73 +25,75 @@ export default function NotFoundScreen() {
       const type = params.get("type");
 
       if (error || errorCode || errorDesc) {
-        let msg = "This authentication link is invalid or has expired.";
+        let msg = "The link is invalid or has expired.";
         if (errorCode === "otp_expired" || errorDesc?.includes("expired")) {
-          msg = "Your password reset link has expired. Please request a new link.";
+          msg = "Your password reset link has expired. For security, reset links are only valid for a limited time.";
         } else if (errorDesc) {
           msg = decodeURIComponent(errorDesc.replace(/\+/g, " "));
         }
         setAuthError(msg);
+        setLoading(false);
         return;
       }
 
       if (accessToken || type === "recovery") {
+        // Redirect to reset password screen with the hash preserved
         router.replace("/reset-password");
+        return;
       }
+
+      // Default redirect to home/login
+      router.replace("/");
+    } else {
+      router.replace("/");
     }
   }, []);
 
-  if (authError) {
+  if (loading) {
     return (
-      <>
-        <Stack.Screen options={{ title: "Link Expired" }} />
-        <View style={[styles.container, { backgroundColor: colors.background }]}>
-          <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-            <View style={styles.iconCircle}>
-              <AlertCircle size={36} color="#dc2626" />
-            </View>
-            <Text style={[styles.title, { color: colors.text }]}>Reset Link Expired</Text>
-            <Text style={[styles.description, { color: colors.textSecondary }]}>
-              {authError}
-            </Text>
-
-            <TouchableOpacity
-              style={[styles.primaryButton, { backgroundColor: colors.primary }]}
-              onPress={() => router.replace("/forgot-password")}
-              activeOpacity={0.8}
-            >
-              <KeyRound size={18} color="#fff" style={{ marginRight: 8 }} />
-              <Text style={styles.primaryButtonText}>Request New Reset Link</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.secondaryButton, { borderColor: colors.border }]}
-              onPress={() => router.replace("/")}
-              activeOpacity={0.8}
-            >
-              <ArrowLeft size={16} color={colors.textSecondary} style={{ marginRight: 6 }} />
-              <Text style={[styles.secondaryButtonText, { color: colors.textSecondary }]}>
-                Back to Sign In
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </SafeAreaView>
     );
   }
 
-  return (
-    <>
-      <Stack.Screen options={{ title: "Page Not Found" }} />
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <Text style={[styles.title, { color: colors.text }]}>This screen doesn't exist.</Text>
+  if (authError) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+          <View style={styles.iconCircle}>
+            <AlertTriangle size={36} color="#dc2626" />
+          </View>
+          <Text style={[styles.title, { color: colors.text }]}>Link Expired or Invalid</Text>
+          <Text style={[styles.description, { color: colors.textSecondary }]}>
+            {authError}
+          </Text>
 
-        <Link href="/" style={styles.link}>
-          <Text style={[styles.linkText, { color: colors.primary }]}>Go to home screen!</Text>
-        </Link>
-      </View>
-    </>
-  );
+          <TouchableOpacity
+            style={[styles.primaryButton, { backgroundColor: colors.primary }]}
+            onPress={() => router.replace("/forgot-password")}
+            activeOpacity={0.8}
+          >
+            <KeyRound size={18} color="#fff" style={{ marginRight: 8 }} />
+            <Text style={styles.primaryButtonText}>Request New Reset Link</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.secondaryButton, { borderColor: colors.border }]}
+            onPress={() => router.replace("/")}
+            activeOpacity={0.8}
+          >
+            <ArrowLeft size={16} color={colors.textSecondary} style={{ marginRight: 6 }} />
+            <Text style={[styles.secondaryButtonText, { color: colors.textSecondary }]}>
+              Back to Sign In
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  return null;
 }
 
 const styles = StyleSheet.create({
@@ -159,14 +163,6 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: {
     fontSize: 14,
-    fontWeight: "600",
-  },
-  link: {
-    marginTop: 15,
-    paddingVertical: 15,
-  },
-  linkText: {
-    fontSize: 15,
     fontWeight: "600",
   },
 });

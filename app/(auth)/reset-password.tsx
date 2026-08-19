@@ -14,7 +14,7 @@ import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "@/context/theme";
 import { supabase } from "@/services/supabase";
-import { Lock, CheckCircle2, Eye, EyeOff, ShieldCheck } from "lucide-react-native";
+import { Lock, CheckCircle2, Eye, EyeOff, ShieldCheck, AlertCircle, KeyRound, ArrowLeft } from "lucide-react-native";
 
 export default function ResetPasswordScreen() {
   const [newPassword, setNewPassword] = useState("");
@@ -23,8 +23,67 @@ export default function ResetPasswordScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [successUpdated, setSuccessUpdated] = useState(false);
+  const [isSessionReady, setIsSessionReady] = useState(false);
   const router = useRouter();
   const { colors } = useTheme();
+
+  useEffect(() => {
+    // Check if there is an error in URL hash (e.g. expired link)
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      const hash = window.location.hash || "";
+      const search = window.location.search || "";
+      const fullQuery = hash.startsWith("#") ? hash.substring(1) : search.startsWith("?") ? search.substring(1) : "";
+      const params = new URLSearchParams(fullQuery);
+      
+      const urlError = params.get("error");
+      const urlErrorCode = params.get("error_code");
+      const urlErrorDesc = params.get("error_description");
+      const accessToken = params.get("access_token");
+      const refreshToken = params.get("refresh_token");
+
+      if (urlError || urlErrorCode || urlErrorDesc) {
+        if (urlErrorCode === "otp_expired" || urlErrorDesc?.includes("expired")) {
+          setError("Your password reset link has expired. Please request a new link below.");
+        } else if (urlErrorDesc) {
+          setError(decodeURIComponent(urlErrorDesc.replace(/\+/g, " ")));
+        } else {
+          setError("Invalid password reset link. Please request a new one.");
+        }
+        return;
+      }
+
+      // If tokens are in URL hash, establish the session directly
+      if (accessToken && refreshToken) {
+        supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        }).then(({ error: sessionErr }) => {
+          if (sessionErr) {
+            console.error("Session set error:", sessionErr);
+          } else {
+            setIsSessionReady(true);
+          }
+        });
+      }
+    }
+
+    // Check if user already has an active session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        setIsSessionReady(true);
+      }
+    });
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY" || session) {
+        setIsSessionReady(true);
+      }
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
 
   const handleUpdatePassword = async () => {
     if (!newPassword) {
@@ -47,7 +106,7 @@ export default function ResetPasswordScreen() {
 
     try {
       // Updates password for the authenticated recovery session
-      const { data, error: updateError } = await supabase.auth.updateUser({
+      const { error: updateError } = await supabase.auth.updateUser({
         password: newPassword,
       });
 
@@ -56,8 +115,8 @@ export default function ResetPasswordScreen() {
       setSuccessUpdated(true);
     } catch (err: any) {
       console.error("Password update error:", err);
-      if (err.message?.includes("Auth session missing") || err.message?.includes("recovery")) {
-        setError("Password reset link has expired. Please request a new link.");
+      if (err.message?.includes("Auth session missing") || err.message?.includes("recovery") || err.message?.includes("expired")) {
+        setError("Your password reset session has expired. Please request a new reset link.");
       } else {
         setError(err.message || "Failed to update password. Please try again.");
       }
@@ -107,6 +166,35 @@ export default function ResetPasswordScreen() {
                   activeOpacity={0.8}
                 >
                   <Text style={styles.loginButtonText}>Sign In Now</Text>
+                </TouchableOpacity>
+              </View>
+            ) : error && error.includes("expired") ? (
+              <View style={styles.expiredBox}>
+                <View style={styles.errorIconCircle}>
+                  <AlertCircle size={38} color="#dc2626" />
+                </View>
+                <Text style={[styles.errorBoxTitle, { color: colors.text }]}>Link Expired or Invalid</Text>
+                <Text style={[styles.errorBoxDesc, { color: colors.textSecondary }]}>
+                  {error}
+                </Text>
+
+                <TouchableOpacity
+                  style={[styles.loginButton, { backgroundColor: colors.primary, marginTop: 16, width: "100%" }]}
+                  onPress={() => router.replace("/forgot-password")}
+                  activeOpacity={0.8}
+                >
+                  <KeyRound size={18} color="#fff" style={{ marginRight: 8 }} />
+                  <Text style={styles.loginButtonText}>Request New Reset Link</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.cancelLink}
+                  onPress={() => router.replace("/")}
+                >
+                  <ArrowLeft size={16} color={colors.textSecondary} style={{ marginRight: 6 }} />
+                  <Text style={[styles.cancelLinkText, { color: colors.textSecondary }]}>
+                    Back to Sign In
+                  </Text>
                 </TouchableOpacity>
               </View>
             ) : (
@@ -280,9 +368,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   loginButton: {
+    flexDirection: "row",
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: "center",
+    justifyContent: "center",
     marginTop: 8,
   },
   loginButtonText: {
@@ -291,8 +381,10 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   cancelLink: {
+    flexDirection: "row",
     marginTop: 18,
     alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 4,
   },
   cancelLinkText: {
@@ -323,5 +415,31 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 20,
     paddingHorizontal: 8,
+  },
+  expiredBox: {
+    alignItems: "center",
+    paddingVertical: 8,
+  },
+  errorIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#fee2e2",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 14,
+  },
+  errorBoxTitle: {
+    fontSize: 19,
+    fontWeight: "bold",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  errorBoxDesc: {
+    fontSize: 14,
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 14,
+    paddingHorizontal: 6,
   },
 });

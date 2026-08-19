@@ -14,7 +14,23 @@ export default function RootLayout() {
   const [dbReady, setDbReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [connectionError, setConnectionError] = useState<string | null>(null);
-  const [showPreloader, setShowPreloader] = useState(true);
+  const [showPreloader, setShowPreloader] = useState(() => {
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      const hash = window.location.hash || "";
+      const path = window.location.pathname || "";
+      const search = window.location.search || "";
+      if (
+        hash.includes("access_token") ||
+        hash.includes("recovery") ||
+        hash.includes("error") ||
+        path.includes("reset-password") ||
+        search.includes("reset-password")
+      ) {
+        return false;
+      }
+    }
+    return true;
+  });
 
   // Move checkDatabase outside of useEffect so it can be referenced from multiple places
   const checkDatabase = useCallback(async () => {
