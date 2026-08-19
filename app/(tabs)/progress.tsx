@@ -43,7 +43,13 @@ export default function ProgressScreen() {
   const [ecgReports, setEcgReports] = useState<EcgReport[]>([]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || user.isGuest) {
+      setAssessments([]);
+      setEmotions([]);
+      setEcgReports([]);
+      setLoading(false);
+      return;
+    }
 
     const fetchData = async () => {
       setLoading(true);

@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from "react
 import { useColorScheme } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-type ThemeColors = {
+export type ThemeColors = {
   primary: string;
   primaryLight: string;
   secondary: string;
@@ -12,42 +12,50 @@ type ThemeColors = {
   textSecondary: string;
   border: string;
   danger: string;
+  gold: string;
+  accent: string;
 };
 
-type ThemeContextType = {
+export type ThemeContextType = {
   isDark: boolean;
   toggleTheme: () => void;
   colors: ThemeColors;
 };
 
-const lightColors: ThemeColors = {
-  primary: "#6366f1",
-  primaryLight: "#e0e7ff",
-  secondary: "#64748b",
-  background: "#f8fafc",
-  cardBackground: "#ffffff",
-  text: "#334155",
-  textSecondary: "#64748b",
-  border: "#e2e8f0",
-  danger: "#ef4444",
+// 📜 Sacred Vedic Light Theme (Parchment, Sandalwood & Saffron)
+const lightVedicColors: ThemeColors = {
+  primary: "#B45309",        // Deep Saffron / Bhagwa Gold
+  primaryLight: "#FEF3C7",   // Warm Kesar & Sandalwood Mist
+  secondary: "#92400E",      // Antique Ochre / Terracotta
+  background: "#FAF7F2",     // Ancient Sacred Parchment / Rice Paper
+  cardBackground: "#FFFFFF", // Warm Ivory Leaf
+  text: "#291E14",           // Roasted Palm-Leaf Ink
+  textSecondary: "#785D44",  // Sandalwood Dust / Warm Teak
+  border: "#EADDC9",         // Aged Palm Border
+  danger: "#DC2626",         // Sacred Sindoor (Vermillion)
+  gold: "#D97706",           // Temple Diya Gold
+  accent: "#059669",         // Sacred Tulsi Leaf
 };
 
-const darkColors: ThemeColors = {
-  primary: "#818cf8",
-  primaryLight: "#4f46e5",
-  secondary: "#94a3b8",
-  background: "#0f172a",
-  cardBackground: "#1e293b",
-  text: "#f1f5f9",
-  textSecondary: "#94a3b8",
-  border: "#334155",
-  danger: "#f87171",
+// 🪔 Sacred Vedic Dark Theme (Ashram Midnight, Sandalwood Hearth & Sacred Flame)
+const darkVedicColors: ThemeColors = {
+  primary: "#F59E0B",        // Luminous Diya Flame Gold
+  primaryLight: "#451A03",   // Warm Amber Hearth
+  secondary: "#D97706",      // Burnished Temple Brass
+  background: "#18120C",     // Deep Sacred Ashram Night
+  cardBackground: "#251B13", // Aged Teak Wood / Sandalwood Hearth
+  text: "#FEF3C7",           // Candlelit Warm Ivory
+  textSecondary: "#D4B996",  // Warm Temple Ash & Sand
+  border: "#3E2E20",         // Deep Teak Grain
+  danger: "#EF4444",         // Sacred Flame Red
+  gold: "#FBBF24",           // Radiant Gold
+  accent: "#10B981",         // Radiant Tulsi Green
 };
 
 const ThemeContext = createContext<ThemeContextType>({
   isDark: false,
   toggleTheme: () => {},
-  colors: lightColors,
+  colors: lightVedicColors,
 });
 
 interface ThemeProviderProps {
@@ -58,22 +66,20 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
   const systemColorScheme = useColorScheme();
   const [isDark, setIsDark] = useState(systemColorScheme === "dark");
   const [colors, setColors] = useState<ThemeColors>(
-    isDark ? darkColors : lightColors
+    isDark ? darkVedicColors : lightVedicColors
   );
 
   useEffect(() => {
-    // Load saved theme preference
     const loadTheme = async () => {
       try {
         const savedTheme = await AsyncStorage.getItem("theme");
         if (savedTheme !== null) {
           const isDarkTheme = savedTheme === "dark";
           setIsDark(isDarkTheme);
-          setColors(isDarkTheme ? darkColors : lightColors);
+          setColors(isDarkTheme ? darkVedicColors : lightVedicColors);
         } else {
-          // Use system preference if no saved theme
           setIsDark(systemColorScheme === "dark");
-          setColors(systemColorScheme === "dark" ? darkColors : lightColors);
+          setColors(systemColorScheme === "dark" ? darkVedicColors : lightVedicColors);
         }
       } catch (error) {
         console.error("Error loading theme:", error);
@@ -87,7 +93,7 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
     try {
       const newIsDark = !isDark;
       setIsDark(newIsDark);
-      setColors(newIsDark ? darkColors : lightColors);
+      setColors(newIsDark ? darkVedicColors : lightVedicColors);
       await AsyncStorage.setItem("theme", newIsDark ? "dark" : "light");
     } catch (error) {
       console.error("Error saving theme:", error);

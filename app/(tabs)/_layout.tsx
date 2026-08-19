@@ -1,3 +1,5 @@
+
+
 import { Tabs } from "expo-router";
 import { useTheme } from "@/context/theme";
 import { Home, User, BarChart2 } from "lucide-react-native";

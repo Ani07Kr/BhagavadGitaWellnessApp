@@ -22,7 +22,7 @@
         "foregroundImage": "./assets/images/icon2.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "app.rork.bhagavadgita-wellness"
+      "package": "com.ani07kr.bhagavadgitawellness"
     },
     "web": {
       "favicon": "./assets/images/icon2.png"
@@ -37,6 +37,14 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": "https://rork.com/"
+      },
+      "eas": {
+        "projectId": "6b5b7cc2-2c9d-45f1-a8b0-3f3e99c7b4ca"
+      }
     }
   }
 }

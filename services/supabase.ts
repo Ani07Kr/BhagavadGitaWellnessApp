@@ -2,10 +2,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
 import { Alert, Platform } from "react-native";
 
-// Replace with your Supabase URL and anon key
-// IMPORTANT: Update these with your actual Supabase credentials
-const supabaseUrl = "https://agckbqjhzzcelpysqpid.supabase.co";
-const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFnY2ticWpoenpjZWxweXNxcGlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA3NTExNDcsImV4cCI6MjA2NjMyNzE0N30.FCgd316PkGUmHTx61rj17acCr65UYZUyYeA3kwkMLCs";
+// Initialize Supabase with environment variables or fallback
+const supabaseUrl = 
+  process.env.EXPO_PUBLIC_SUPABASE_URL || "https://agckbqjhzzcelpysqpid.supabase.co";
+const supabaseAnonKey = 
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFnY2ticWpoenpjZWxweXNxcGlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA3NTExNDcsImV4cCI6MjA2NjMyNzE0N30.FCgd316PkGUmHTx61rj17acCr65UYZUyYeA3kwkMLCs";
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
@@ -68,11 +69,10 @@ interface SongResponse extends DatabaseResponse {
   };
 }
 
-// SQL to create tables in Supabase
+// SQL to create tables in Supabase with Row Level Security (RLS)
 export const createTables = `
--- Users table is automatically created by Supabase Auth
--- Add display_name column to auth.users
-ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS display_name TEXT;
+-- Enable UUID extension if not already enabled
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Questions table
 CREATE TABLE IF NOT EXISTS public.questions (
@@ -109,6 +109,7 @@ CREATE TABLE IF NOT EXISTS public.ecg_reports (
   file_url TEXT,
   file_type TEXT, -- 'image' or 'pdf'
   heart_rate INTEGER,
+  qrs_interval INTEGER,
   stress_level TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -139,6 +140,32 @@ CREATE TABLE IF NOT EXISTS public.songs (
   url TEXT NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Row Level Security (RLS) Policies
+ALTER TABLE public.questions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_responses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.face_analysis ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ecg_reports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.mantras ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.stories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.songs ENABLE ROW LEVEL SECURITY;
+
+-- Public content read access
+CREATE POLICY IF NOT EXISTS "Allow public read for questions" ON public.questions FOR SELECT USING (true);
+CREATE POLICY IF NOT EXISTS "Allow public read for mantras" ON public.mantras FOR SELECT USING (true);
+CREATE POLICY IF NOT EXISTS "Allow public read for stories" ON public.stories FOR SELECT USING (true);
+CREATE POLICY IF NOT EXISTS "Allow public read for songs" ON public.songs FOR SELECT USING (true);
+
+-- User-scoped security policies for personal wellness data
+CREATE POLICY IF NOT EXISTS "Users can read own responses" ON public.user_responses FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY IF NOT EXISTS "Users can insert own responses" ON public.user_responses FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY IF NOT EXISTS "Users can read own face analysis" ON public.face_analysis FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY IF NOT EXISTS "Users can insert own face analysis" ON public.face_analysis FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY IF NOT EXISTS "Users can read own ecg reports" ON public.ecg_reports FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY IF NOT EXISTS "Users can insert own ecg reports" ON public.ecg_reports FOR INSERT WITH CHECK (auth.uid() = user_id);
+
 
 -- Sample data for questions (50+ questions)
 INSERT INTO public.questions (text, options, category) VALUES

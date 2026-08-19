@@ -2,14 +2,19 @@ import { useEffect, useState, useCallback } from "react";
 import { Stack } from "expo-router";
 import { ThemeProvider } from "@/context/theme";
 import { AuthProvider } from "@/context/auth";
+import { LanguageProvider } from "@/context/language";
 import { StatusBar } from "expo-status-bar";
 import { View, Text, ActivityIndicator, StyleSheet, Platform, Linking, Button } from "react-native";
 import { checkTablesExist, getTableCreationInstructions, testSupabaseConnection } from "@/services/supabase";
+
+import { GuestTimerBanner } from "@/components/GuestTimerBanner";
+import VedicCosmicPreloader from "@/components/VedicCosmicPreloader";
 
 export default function RootLayout() {
   const [dbReady, setDbReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [showPreloader, setShowPreloader] = useState(true);
 
   // Move checkDatabase outside of useEffect so it can be referenced from multiple places
   const checkDatabase = useCallback(async () => {
@@ -57,7 +62,7 @@ export default function RootLayout() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#6366f1" />
+        <ActivityIndicator size="large" color="#B45309" />
         <Text style={styles.loadingText}>Initializing Bhagavad Gita Wellness...</Text>
       </View>
     );
@@ -72,7 +77,7 @@ export default function RootLayout() {
           <Button 
             title="View Setup Instructions" 
             onPress={openReadme} 
-            color="#6366f1"
+            color="#B45309"
           />
           <Button 
             title="Retry Connection" 
@@ -81,7 +86,7 @@ export default function RootLayout() {
               setConnectionError(null);
               checkDatabase();
             }} 
-            color="#6366f1"
+            color="#B45309"
           />
         </View>
       </View>
@@ -90,17 +95,29 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider>
-      <AuthProvider>
-        <StatusBar style="auto" />
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="questions/[id]" options={{ headerShown: false }} />
-          <Stack.Screen name="face-detection" options={{ headerShown: false }} />
-          <Stack.Screen name="ecg-upload" options={{ headerShown: false }} />
-          <Stack.Screen name="results" options={{ headerShown: false }} />
-        </Stack>
-      </AuthProvider>
+      <LanguageProvider>
+        <AuthProvider>
+          <View style={{ flex: 1 }}>
+            <StatusBar style="auto" />
+            <GuestTimerBanner />
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="questions/[id]" options={{ headerShown: false }} />
+              <Stack.Screen name="face-detection" options={{ headerShown: false }} />
+              <Stack.Screen name="ecg-upload" options={{ headerShown: false }} />
+              <Stack.Screen name="kundli" options={{ headerShown: false }} />
+              <Stack.Screen name="panchang" options={{ headerShown: false }} />
+              <Stack.Screen name="results" options={{ headerShown: false }} />
+            </Stack>
+
+            {/* 🕉️ 10-Second Sacred Vedic Preloader Screen with Falling & Jumping Mantras & Om Chants */}
+            {showPreloader && (
+              <VedicCosmicPreloader onComplete={() => setShowPreloader(false)} />
+            )}
+          </View>
+        </AuthProvider>
+      </LanguageProvider>
     </ThemeProvider>
   );
 }
@@ -110,35 +127,36 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#f8fafc",
+    backgroundColor: "#FAF7F2",
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: "#64748b",
+    color: "#785D44",
+    fontWeight: "500",
   },
   errorContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#f8fafc",
+    backgroundColor: "#FAF7F2",
     padding: 20,
   },
   errorTitle: {
     fontSize: 22,
     fontWeight: "bold",
-    color: "#ef4444",
-    marginBottom: 12,
+    color: "#DC2626",
+    marginBottom: 8,
   },
   errorText: {
-    fontSize: 16,
-    color: "#64748b",
+    fontSize: 14,
+    color: "#4B5563",
     textAlign: "center",
     marginBottom: 24,
+    lineHeight: 20,
   },
   buttonContainer: {
-    width: "100%",
-    maxWidth: 300,
+    flexDirection: "row",
     gap: 12,
-  }
+  },
 });

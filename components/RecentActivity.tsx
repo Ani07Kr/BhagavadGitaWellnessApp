@@ -4,34 +4,48 @@ import { supabase } from "@/services/supabase";
 import { useAuth } from "@/context/auth";
 import { useTheme } from "@/context/theme";
 
+interface ActivityItem {
+  type: string;
+  created_at: string;
+}
+
 export default function RecentActivity() {
   const { user } = useAuth();
   const { colors } = useTheme();
-  const [activity, setActivity] = useState([]);
+  const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchActivity = async () => {
-      if (!user?.id) return;
+      if (!user?.id || user.isGuest) {
+        setActivity([]);
+        setLoading(false);
+        return;
+      }
 
-      const [res1, res2, res3] = await Promise.all([
-        supabase.from("user_responses").select("created_at").eq("user_id", user.id),
-        supabase.from("ecg_reports").select("created_at").eq("user_id", user.id),
-        supabase.from("face_analysis").select("created_at").eq("user_id", user.id),
-      ]);
+      try {
+        const [res1, res2, res3] = await Promise.all([
+          supabase.from("user_responses").select("created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(5),
+          supabase.from("ecg_reports").select("created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(5),
+          supabase.from("face_analysis").select("created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(5),
+        ]);
 
-      const labeled = [
-        ...(res1.data?.map((item) => ({ ...item, type: "Assessment" })) || []),
-        ...(res2.data?.map((item) => ({ ...item, type: "ECG Report" })) || []),
-        ...(res3.data?.map((item) => ({ ...item, type: "Emotion Detection" })) || []),
-      ];
+        const labeled: ActivityItem[] = [
+          ...(res1.data?.map((item) => ({ created_at: item.created_at, type: "Assessment" })) || []),
+          ...(res2.data?.map((item) => ({ created_at: item.created_at, type: "ECG Report" })) || []),
+          ...(res3.data?.map((item) => ({ created_at: item.created_at, type: "Emotion Detection" })) || []),
+        ];
 
-      const sorted = labeled.sort(
-        (a, b) => new Date(b.created_at) - new Date(a.created_at)
-      );
+        const sorted = labeled.sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
 
-      setActivity(sorted);
-      setLoading(false);
+        setActivity(sorted);
+      } catch (err) {
+        console.error("Error fetching recent activity:", err);
+      } finally {
+        setLoading(false);
+      }
     };
 
     fetchActivity();

@@ -4,8 +4,10 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "@/context/theme";
 import { useAuth } from "@/context/auth";
-import { supabase, getRandomQuestionsForAssessment, getRandomMantraForEmotionType } from "@/services/supabase";
-import { ArrowRight, ArrowLeft } from "lucide-react-native";
+import { supabase, getRandomQuestionsForAssessment, getRandomMantraForEmotionType, EmotionType } from "@/services/supabase";
+import { analyzeMentalAssessmentWithAI, QuestionAnswer } from "@/services/aiWellness";
+import { ChevronLeft, Volume2, VolumeX } from "lucide-react-native";
+import { NaturalVoiceAssistant } from "@/services/voiceAssistant";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 interface QuestionOption {
@@ -34,10 +36,37 @@ export default function QuestionScreen() {
   
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [speakingQuestion, setSpeakingQuestion] = useState(false);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
   const [selectedOption, setSelectedOption] = useState<QuestionOption | null>(null);
   const [responses, setResponses] = useState<ResponseMap>({});
+
+  const toggleSpeakQuestion = () => {
+    if (!currentQuestion) return;
+
+    if (speakingQuestion) {
+      NaturalVoiceAssistant.stop();
+      setSpeakingQuestion(false);
+    } else {
+      const optionsText = currentQuestion.options.map((o, idx) => `Option ${idx + 1}: ${o.text}`).join(". ");
+      const fullTextToSpeak = `${currentQuestion.text}. ${optionsText}`;
+      NaturalVoiceAssistant.speak(
+        fullTextToSpeak,
+        "en",
+        "male",
+        () => setSpeakingQuestion(true),
+        () => setSpeakingQuestion(false),
+        () => setSpeakingQuestion(false)
+      );
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      NaturalVoiceAssistant.stop();
+    };
+  }, []);
 
   useEffect(() => {
     const loadQuestions = async () => {
@@ -107,90 +136,89 @@ export default function QuestionScreen() {
     }
   }, [currentQuestion, responses]);
 
-  const handleOptionSelect = (option: QuestionOption) => {
+  const handleOptionSelect = async (option: QuestionOption) => {
+    if (submitting || !currentQuestion) return;
+    
     setSelectedOption(option);
-  };
-
-  const handleNext = async () => {
-    if (!selectedOption || !currentQuestion) return;
     
     // Save response
     const newResponses = {
       ...responses,
-      [currentQuestion.id]: selectedOption,
+      [currentQuestion.id]: option,
     };
     setResponses(newResponses);
     
     // Store responses in AsyncStorage
     await AsyncStorage.setItem('assessment_responses', JSON.stringify(newResponses));
     
-    // If last question, submit all responses
-    if (questionIndex >= questions.length - 1) {
-      await submitResponses(newResponses);
-      return;
-    }
-    
-    // Go to next question
-    router.push(`/questions/${questionIndex + 2}`); // +2 because we're using 1-based indexing in the URL
+    // Auto-advance with smooth micro-delay for visual feedback
+    setTimeout(async () => {
+      if (questionIndex >= questions.length - 1) {
+        await submitResponses(newResponses);
+      } else {
+        router.push(`/questions/${questionIndex + 2}`); // +2 for 1-based indexing
+      }
+    }, 220);
   };
 
-  const handlePrevious = () => {
+  const handleBack = () => {
     if (questionIndex > 0) {
-      router.push(`/questions/${questionIndex}`); // No need to add 1 here since we're going back
+      router.push(`/questions/${questionIndex}`);
+    } else {
+      router.push("/(tabs)");
     }
   };
 
   const submitResponses = async (allResponses: ResponseMap) => {
     setSubmitting(true);
     try {
-      // Calculate emotional score (simple average for demo)
-      const values = Object.values(allResponses);
-      const sum = values.reduce((acc, val) => acc + (val.value || 0), 0);
-      const emotionalScore = Math.round((sum / values.length) * 10) / 10;
-      
-      // Get emotion type based on score
-      const emotionType = getEmotionTypeFromScore(emotionalScore);
-      
-      // Get random mantra based on emotion type
-      let mantra = { text: "", explanation: "" };
-      
-      try {
-        const { data, success } = await getRandomMantraForEmotionType(emotionType);
-        if (success && data) {
-          mantra = { text: data.text, explanation: data.explanation };
-        } else {
-          // Fallback to default mantra
-          mantra = getDefaultMantra(emotionType);
-        }
-      } catch (error) {
-        console.error("Error getting mantra:", error);
-        mantra = getDefaultMantra(emotionType);
-      }
-      
-      // Save to Supabase
-      if (user) {
-        const { error } = await supabase.from("user_responses").insert({
+      // Format answers for AI analysis
+      const formattedAnswers: QuestionAnswer[] = questions.map((q) => ({
+        questionId: q.id,
+        questionText: q.text,
+        category: q.category,
+        selectedOption: allResponses[q.id] || { id: 0, text: "Neutral", value: 3 },
+      }));
+
+      // Analyze with Gemini AI / Vedic Guna Engine
+      const aiAnalysis = await analyzeMentalAssessmentWithAI(formattedAnswers);
+
+      // Save to Supabase only if user is logged in with a real account (No data saved in guest mode)
+      if (user && !user.isGuest) {
+        const { error: dbError } = await supabase.from("user_responses").insert({
           user_id: user.id,
           responses: allResponses,
-          emotional_score: emotionalScore,
-          recommended_mantra: mantra.text
+          emotional_score: aiAnalysis.emotionalScore,
+          recommended_mantra: aiAnalysis.mantra.text,
         });
-        
-        if (error) throw error;
+
+        if (dbError) console.error("Database insert error:", dbError);
       }
-      
+
       // Clear stored questions and responses
       await AsyncStorage.removeItem('assessment_questions');
       await AsyncStorage.removeItem('assessment_responses');
-      
-      // Navigate to results
+
+      // Navigate to results screen with rich AI & Guna profile data
       router.push({
         pathname: "/results",
         params: {
           source: "questions",
-          score: emotionalScore,
-          mantra: mantra.text,
-          explanation: mantra.explanation
+          score: aiAnalysis.emotionalScore.toFixed(1),
+          emotion: aiAnalysis.emotionalState,
+          headline: aiAnalysis.headline,
+          summary: aiAnalysis.summary,
+          mantra: aiAnalysis.mantra.text,
+          explanation: aiAnalysis.mantra.explanation,
+          chapter: aiAnalysis.gitaWisdom.chapter,
+          verse: aiAnalysis.gitaWisdom.verse,
+          story: aiAnalysis.gitaWisdom.reflection,
+          sattva: aiAnalysis.gunaProfile.sattva.toString(),
+          rajas: aiAnalysis.gunaProfile.rajas.toString(),
+          tamas: aiAnalysis.gunaProfile.tamas.toString(),
+          dominantGuna: aiAnalysis.gunaProfile.dominantGuna,
+          insights: JSON.stringify(aiAnalysis.actionableInsights),
+          isAi: aiAnalysis.isAiGenerated ? "true" : "false",
         }
       });
     } catch (error) {
@@ -235,12 +263,24 @@ export default function QuestionScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={["bottom"]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={["top", "bottom"]}>
+      {/* Top Navigation Header */}
+      <View style={styles.topBar}>
+        <TouchableOpacity
+          style={[styles.backButton, { backgroundColor: colors.cardBackground }]}
+          onPress={handleBack}
+          disabled={submitting}
+        >
+          <ChevronLeft size={22} color={colors.text} />
+        </TouchableOpacity>
+        <Text style={[styles.progressCountText, { color: colors.textSecondary }]}>
+          {questionIndex + 1} / {questions.length}
+        </Text>
+        <View style={{ width: 40 }} />
+      </View>
+
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.progressContainer}>
-          <Text style={[styles.progressText, { color: colors.textSecondary }]}>
-            Question {questionIndex + 1} of {questions.length}
-          </Text>
           <View style={styles.progressBarContainer}>
             <View 
               style={[
@@ -260,88 +300,76 @@ export default function QuestionScreen() {
           </Text>
         )}
         
-        <Text style={[styles.questionText, { color: colors.text }]}>
-          {currentQuestion.text}
-        </Text>
+        <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+          <Text style={[styles.questionText, { color: colors.text, flex: 1 }]}>
+            {currentQuestion.text}
+          </Text>
+          <TouchableOpacity
+            style={[
+              styles.speakQuestionBtn,
+              { backgroundColor: speakingQuestion ? "#16a34a" : colors.primaryLight },
+            ]}
+            onPress={toggleSpeakQuestion}
+          >
+            {speakingQuestion ? (
+              <VolumeX size={18} color="#fff" />
+            ) : (
+              <Volume2 size={18} color={colors.primary} />
+            )}
+          </TouchableOpacity>
+        </View>
         
         <View style={styles.optionsContainer}>
-          {currentQuestion.options.map((option) => (
-            <TouchableOpacity
-              key={option.id}
-              style={[
-                styles.optionButton,
-                { 
-                  backgroundColor: selectedOption?.id === option.id 
-                    ? colors.primaryLight 
-                    : colors.cardBackground 
-                },
-                selectedOption?.id === option.id && { borderColor: colors.primary, borderWidth: 2 }
-              ]}
-              onPress={() => handleOptionSelect(option)}
-            >
-              <Text 
+          {currentQuestion.options.map((option) => {
+            const isSelected = selectedOption?.id === option.id;
+            return (
+              <TouchableOpacity
+                key={option.id}
                 style={[
-                  styles.optionText, 
+                  styles.optionButton,
                   { 
-                    color: selectedOption?.id === option.id 
-                      ? colors.primary 
-                      : colors.text 
+                    backgroundColor: isSelected 
+                      ? colors.primaryLight 
+                      : colors.cardBackground,
+                    borderColor: isSelected ? colors.primary : colors.border,
+                    borderWidth: isSelected ? 2 : 1,
                   }
                 ]}
+                onPress={() => handleOptionSelect(option)}
+                disabled={submitting}
+                activeOpacity={0.7}
               >
-                {option.text}
-              </Text>
-            </TouchableOpacity>
-          ))}
+                <Text 
+                  style={[
+                    styles.optionText, 
+                    { 
+                      color: isSelected ? colors.primary : colors.text,
+                      fontWeight: isSelected ? "700" : "500",
+                    }
+                  ]}
+                >
+                  {option.text}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
+
+        {submitting && (
+          <View style={styles.submittingContainer}>
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text style={[styles.submittingText, { color: colors.textSecondary }]}>
+              Calculating your wellness score...
+            </Text>
+          </View>
+        )}
       </ScrollView>
-      
-      <View style={[styles.footer, { backgroundColor: colors.background }]}>
-        <TouchableOpacity
-          style={[
-            styles.navButton,
-            { backgroundColor: colors.cardBackground },
-            questionIndex === 0 && { opacity: 0.5 }
-          ]}
-          onPress={handlePrevious}
-          disabled={questionIndex === 0}
-        >
-          <ArrowLeft size={20} color={colors.text} />
-          <Text style={[styles.navButtonText, { color: colors.text }]}>Previous</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[
-            styles.navButton,
-            { backgroundColor: selectedOption ? colors.primary : colors.cardBackground },
-            !selectedOption && { opacity: 0.5 }
-          ]}
-          onPress={handleNext}
-          disabled={!selectedOption || submitting}
-        >
-          {submitting ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <>
-              <Text 
-                style={[
-                  styles.navButtonText, 
-                  { color: selectedOption ? "#fff" : colors.text }
-                ]}
-              >
-                {questionIndex >= questions.length - 1 ? "Submit" : "Next"}
-              </Text>
-              <ArrowRight size={20} color={selectedOption ? "#fff" : colors.text} />
-            </>
-          )}
-        </TouchableOpacity>
-      </View>
     </SafeAreaView>
   );
 }
 
 // Helper function to get emotion type from score
-function getEmotionTypeFromScore(score: number): string {
+function getEmotionTypeFromScore(score: number): EmotionType {
   if (score <= 2) return "negative";
   if (score <= 3) return "neutral";
   if (score <= 4) return "positive";
@@ -349,7 +377,7 @@ function getEmotionTypeFromScore(score: number): string {
 }
 
 // Helper function to get a default mantra if API fails
-function getDefaultMantra(emotionType: string): { text: string; explanation: string } {
+function getDefaultMantra(emotionType: EmotionType): { text: string; explanation: string } {
   switch (emotionType) {
     case "negative":
       return {
@@ -645,25 +673,46 @@ const styles = StyleSheet.create({
   optionText: {
     fontSize: 16,
   },
-  footer: {
+  topBar: {
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
-    padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: "#e2e8f0",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
   },
-  navButton: {
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  progressCountText: {
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  submittingContainer: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    minWidth: 120,
+    gap: 10,
+    marginTop: 20,
+    paddingVertical: 14,
   },
-  navButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginHorizontal: 8,
+  submittingText: {
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  speakQuestionBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

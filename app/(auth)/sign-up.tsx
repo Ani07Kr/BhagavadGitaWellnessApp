@@ -1,7 +1,19 @@
 import { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Alert } from "react-native";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  ActivityIndicator,
+  Alert
+} from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useTheme } from "@/context/theme";
 import { supabase } from "@/services/supabase";
 
 export default function SignUpScreen() {
@@ -12,60 +24,56 @@ export default function SignUpScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
+  const { colors } = useTheme();
 
   const handleSignUp = async () => {
     if (!email || !password || !confirmPassword || !displayName) {
       setError("Please fill in all fields");
       return;
     }
-    
+
     if (password !== confirmPassword) {
       setError("Passwords do not match");
       return;
     }
-    
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters");
+
+    const passwordRegex =
+      /^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+{}\[\]:;<>,.?~\\/-]).{6,}$/;
+
+    if (!passwordRegex.test(password)) {
+      setError(
+        "Password must be at least 6 characters, include 1 uppercase letter, 1 number, and 1 special character"
+      );
       return;
     }
-    
+
     setLoading(true);
     setError("");
-    
+
     try {
       const { data, error: authError } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
-            display_name: displayName
-          }
-        }
+            display_name: displayName,
+          },
+        },
       });
-      
+
       if (authError) throw authError;
-      
+
       if (data) {
         Alert.alert(
           "Account Created",
-          "Your account has been created successfully. You can now sign in.",
+          "Your sacred journey begins. You can now sign in.",
           [{ text: "OK", onPress: () => router.replace("/") }]
         );
       }
     } catch (err: any) {
       console.error("Signup error:", err);
-      
-      // More specific error handling
-      if (err.message.includes("network")) {
-        setError("Network error. Please check your internet connection.");
-      } else if (err.message.includes("database") || err.message.includes("table")) {
-        setError("Database error. Please make sure you've set up the Supabase tables correctly. See README.md for instructions.");
-        Alert.alert(
-          "Database Setup Required",
-          "It looks like your Supabase database tables aren't set up correctly. Please follow the instructions in the README.md file.",
-          [{ text: "OK" }]
-        );
-      } else if (err.message.includes("already registered")) {
+
+      if (err.message?.includes("already registered")) {
         setError("This email is already registered. Please sign in instead.");
       } else {
         setError(err.message || "Failed to sign up");
@@ -76,69 +84,76 @@ export default function SignUpScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardAvoid}
       >
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.headerContainer}>
-            <Text style={styles.headerTitle}>Create Account</Text>
-            <Text style={styles.headerSubtitle}>Join Bhagavad Gita Wellness to start your journey</Text>
+            <Text style={[styles.headerTitle, { color: colors.primary }]}>Create Account</Text>
+            <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
+              Join Bhagavad Gita Wellness to begin your inner transformation
+            </Text>
           </View>
-          
-          <View style={styles.formContainer}>
-            {error ? <Text style={styles.errorText}>{error}</Text> : null}
-            
+
+          <View style={[styles.formContainer, { backgroundColor: colors.cardBackground, borderColor: colors.border, borderWidth: 1 }]}>
+            {error ? <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text> : null}
+
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Display Name</Text>
+              <Text style={[styles.label, { color: colors.text }]}>Display Name</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border, borderWidth: 1 }]}
                 placeholder="Enter your name"
+                placeholderTextColor={colors.textSecondary}
                 value={displayName}
                 onChangeText={setDisplayName}
                 autoCapitalize="words"
               />
             </View>
-            
+
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Email</Text>
+              <Text style={[styles.label, { color: colors.text }]}>Email</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border, borderWidth: 1 }]}
                 placeholder="Enter your email"
+                placeholderTextColor={colors.textSecondary}
                 value={email}
                 onChangeText={setEmail}
                 autoCapitalize="none"
                 keyboardType="email-address"
               />
             </View>
-            
+
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Password</Text>
+              <Text style={[styles.label, { color: colors.text }]}>Password</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border, borderWidth: 1 }]}
                 placeholder="Create a password"
+                placeholderTextColor={colors.textSecondary}
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry
               />
             </View>
-            
+
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Confirm Password</Text>
+              <Text style={[styles.label, { color: colors.text }]}>Confirm Password</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border, borderWidth: 1 }]}
                 placeholder="Confirm your password"
+                placeholderTextColor={colors.textSecondary}
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 secureTextEntry
               />
             </View>
-            
+
             <TouchableOpacity
-              style={styles.signupButton}
+              style={[styles.signupButton, { backgroundColor: colors.primary }]}
               onPress={handleSignUp}
               disabled={loading}
+              activeOpacity={0.8}
             >
               {loading ? (
                 <ActivityIndicator color="#fff" />
@@ -146,26 +161,13 @@ export default function SignUpScreen() {
                 <Text style={styles.signupButtonText}>Create Account</Text>
               )}
             </TouchableOpacity>
-            
+
             <View style={styles.loginContainer}>
-              <Text style={styles.loginText}>Already have an account?</Text>
+              <Text style={[styles.loginText, { color: colors.textSecondary }]}>Already have an account?</Text>
               <TouchableOpacity onPress={() => router.back()}>
-                <Text style={styles.loginLink}>Sign In</Text>
+                <Text style={[styles.loginLink, { color: colors.primary }]}>Sign In</Text>
               </TouchableOpacity>
             </View>
-            
-            <TouchableOpacity 
-              style={styles.helpLink}
-              onPress={() => {
-                Alert.alert(
-                  "Supabase Setup Required",
-                  "If you're having trouble signing up, make sure you've set up your Supabase database correctly. See the README.md file for detailed instructions.",
-                  [{ text: "OK" }]
-                );
-              }}
-            >
-              <Text style={styles.helpLinkText}>Having trouble connecting?</Text>
-            </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -176,7 +178,6 @@ export default function SignUpScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f8fafc",
   },
   keyboardAvoid: {
     flex: 1,
@@ -187,27 +188,25 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   headerContainer: {
-    marginBottom: 32,
+    marginBottom: 28,
   },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: "bold",
-    color: "#334155",
     marginBottom: 8,
     textAlign: "center",
   },
   headerSubtitle: {
-    fontSize: 16,
-    color: "#64748b",
+    fontSize: 15,
     textAlign: "center",
+    lineHeight: 22,
   },
   formContainer: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 24,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.06,
     shadowRadius: 8,
     elevation: 2,
   },
@@ -216,20 +215,16 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 14,
-    fontWeight: "500",
-    color: "#334155",
+    fontWeight: "600",
     marginBottom: 6,
   },
   input: {
-    backgroundColor: "#f1f5f9",
-    borderRadius: 8,
+    borderRadius: 10,
     padding: 12,
-    fontSize: 16,
-    color: "#334155",
+    fontSize: 15,
   },
   signupButton: {
-    backgroundColor: "#6366f1",
-    borderRadius: 8,
+    borderRadius: 10,
     padding: 14,
     alignItems: "center",
     marginTop: 8,
@@ -237,34 +232,25 @@ const styles = StyleSheet.create({
   signupButtonText: {
     color: "#fff",
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: "700",
   },
   loginContainer: {
     flexDirection: "row",
     justifyContent: "center",
-    marginTop: 24,
+    marginTop: 20,
   },
   loginText: {
-    color: "#64748b",
     fontSize: 14,
   },
   loginLink: {
-    color: "#6366f1",
     fontSize: 14,
-    fontWeight: "600",
+    fontWeight: "700",
     marginLeft: 4,
   },
   errorText: {
-    color: "#ef4444",
-    marginBottom: 16,
+    marginBottom: 14,
     textAlign: "center",
-  },
-  helpLink: {
-    marginTop: 16,
-    alignItems: "center",
-  },
-  helpLinkText: {
-    color: "#6366f1",
     fontSize: 14,
+    fontWeight: "500",
   },
 });
